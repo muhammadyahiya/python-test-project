@@ -1,2 +1,5 @@
+python-dotenv
+sqlalchemy
+psycopg2
 streamlit
 requests
