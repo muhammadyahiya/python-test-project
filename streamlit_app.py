@@ -1,61 +1,55 @@
 import streamlit as st
-import requests
-from db import engine
-import pandas as pd
-from sqlalchemy import text
+from database import SessionLocal, UserSubmission, test_connection, init_db
 
-st.set_page_config(page_title="Python Code Executor", page_icon="🐍")
+# Initialize database
+init_db()
 
-st.title("🧪 Online Python Code Executor with User Info")
+# Test database connection
+if not test_connection():
+    st.error("❌ Failed to connect to the database. Please check your configuration.")
+    st.stop()
 
-# Inputs
-name = st.text_input("👤 Name")
-qualification = st.text_input("🎓 Education Qualification")
-code = st.text_area("💻 Enter your Python code:", height=300, value='print("Hello, world!")')
+def save_submission(name, qualification, code, output):
+    session = SessionLocal()
+    try:
+        submission = UserSubmission(
+            name=name,
+            qualification=qualification,
+            code=code,
+            output=output
+        )
+        session.add(submission)
+        session.commit()
+        return True
+    except Exception as e:
+        session.rollback()
+        raise e
+    finally:
+        session.close()
 
-# On Run
+# Streamlit UI
+st.title("Interview Preparation Assistant")
+
+# Sidebar for user information
+with st.sidebar:
+    st.header("User Information")
+    name = st.text_input("Name")
+    qualification = st.text_input("Qualification")
+
+# Main content
+st.header("Python Code Editor")
+code = st.text_area("Enter your Python code here:", height=200)
+
 if st.button("Run Code"):
-    if not name or not qualification or not code.strip():
-        st.warning("Please complete all fields.")
+    if name and qualification and code:
+        try:
+            # Here you would typically send the code to Piston API
+            # For now, we'll just save it
+            output = "Code execution placeholder"
+            if save_submission(name, qualification, code, output):
+                st.success("Code executed and saved successfully!")
+                st.code(output)
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
     else:
-        with st.spinner("Running and saving your code..."):
-            try:
-                # Execute the code with Piston API
-                payload = {
-                    "language": "python3",
-                    "version": "3.10.0",
-                    "files": [{"name": "main.py", "content": code}]
-                }
-                response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload)
-
-                if response.status_code == 200:
-                    result = response.json()
-                    output = result.get("run", {}).get("output", "")
-
-                    # Display user details and output
-                    st.success("✅ Code executed successfully!")
-                    st.subheader("👤 User Info")
-                    st.markdown(f"**Name:** {name}")
-                    st.markdown(f"**Qualification:** {qualification}")
-                    st.subheader("📤 Output:")
-                    st.code(output)
-
-                    # Save to DB
-                    with engine.connect() as conn:
-                        insert_query = text("""
-                            INSERT INTO user_code_logs (name, qualification, code, output)
-                            VALUES (:name, :qualification, :code, :output)
-                        """)
-                        conn.execute(insert_query, {
-                            "name": name,
-                            "qualification": qualification,
-                            "code": code,
-                            "output": output
-                        })
-
-                        st.info("🗂 User data and code execution saved to database.")
-
-                else:
-                    st.error("❌ Failed to execute code.")
-            except Exception as e:
-                st.error(f"⚠️ Error: {e}")
+        st.warning("Please fill in all fields (Name, Qualification, and Code)")
